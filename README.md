@@ -18,6 +18,7 @@ This extension contributes the following settings:
 
 * `openGrok.serverURL`: Full path to the OpenGrok server.
 * `openGrok.defaultProjects`: List of projects to search by default.
+* `openGrok.localRootDir`: Full path to the root folder of the projects.
 
 ## How to Use
 

@@ -88,10 +88,12 @@ export class TreeItem extends vscode.TreeItem {
             numMatches += this.searchResponseBody.results[filePath].length;
         });
         this.label = `${canonQuery} (${numMatches} matches)`;
+        this.iconPath = new vscode.ThemeIcon('search-view-icon', new vscode.ThemeColor('#FFC000'));
     }
 
     private constructDirectoryItem() {
         this.label = this.directoryPath!;
+        this.iconPath = vscode.ThemeIcon.Folder;
     }
 
     private constructFileItem() {
@@ -229,17 +231,6 @@ export function buildTreeItems(
     return resultItem;
 }
 
-// Stores the state of the TreeDataProvider that will be restored when a
-// workspace is re-opened. The state must be JSON serializable, so this only
-// contains the original query and its response. We cannot persist TreeItem
-// objects themselves.
-export interface WorkspaceState {
-    queries: {
-        searchQuery: opengrok.SearchQuery,
-        searchResponseBody: opengrok.SearchResponseBody
-    }[]
-};
-
 export class TreeDataProvider implements vscode.TreeDataProvider<TreeItem> {
 
     constructor(public readonly keepRecentSearches: number) {}
@@ -285,30 +276,6 @@ export class TreeDataProvider implements vscode.TreeDataProvider<TreeItem> {
                 }
             }
         }
-        this._onDidChangeTreeData.fire();
-    }
-
-    getWorkspaceState(): WorkspaceState {
-        let workspaceState: WorkspaceState = {
-            queries: []
-        };
-        this._resultItems.forEach((item) => {
-            workspaceState.queries.push({
-                searchQuery: item.searchQuery,
-                searchResponseBody: item.searchResponseBody
-            });
-        });
-        return workspaceState;
-    }
-
-    setWorkspaceState(workspaceState: WorkspaceState) {
-        let resultItems: TreeItem[] = [];
-        workspaceState.queries.forEach((query) => {
-            const item = buildTreeItems(
-                query.searchQuery, query.searchResponseBody);
-            resultItems.push(item);
-        });
-        this._resultItems = resultItems;
         this._onDidChangeTreeData.fire();
     }
 

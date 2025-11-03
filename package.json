@@ -1,20 +1,20 @@
 {
-  "name": "samwarring-vscode-opengrok",
+  "name": "vscode-opengrok",
   "repository": {
     "type": "git",
-    "url": "https://github.com/samwarring/vscode_opengrok.git"
+    "url": "https://github.com/mgevor/vscode_opengrok"
   },
-  "publisher": "samwarring",
+  "publisher": "mgevor",
   "license": "SEE LICENSE IN LICENSE.txt",
-  "displayName": "OpenGrok for VS Code",
-  "description": "OpenGrok Client for VS Code",
-  "version": "0.0.1",
+  "displayName": "OpenGrok",
+  "description": "Based on the 'OpenGrok Client for VS Code' project by @samwarring\nModified and build by @mgevor",
+  "version": "1.0.0",
   "icon": "images/OpenGrokIcon.png",
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.80.0"
   },
   "categories": [
-    "Other"
+    "Search"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
@@ -24,16 +24,6 @@
         "command": "openGrok.search",
         "title": "OpenGrok: Search",
         "icon": "$(search)"
-      },
-      {
-        "command": "openGrok.searchSelection",
-        "title": "OpenGrok: Search for Selection",
-        "icon": "$(search)"
-      },
-      {
-        "command": "openGrok.clearResults",
-        "title": "OpenGrok: Clear All Results",
-        "icon": "$(search-clear-results)"
       },
       {
         "command": "openGrok.removeResultItem",
@@ -54,6 +44,11 @@
         "command": "openGrok.openInEditor",
         "title": "OpenGrok: Open In Editor",
         "icon": "$(go-to-file)"
+      },
+      {
+        "command": "openGrok.login",
+        "title": "OpenGrok: login",
+        "icon": "$(login)"
       }
     ],
     "configuration": {
@@ -61,22 +56,37 @@
       "properties": {
         "openGrok.serverURL": {
           "type": "string",
-          "markdownDescription": "Full URL of the OpenGrok server. This must include the leading `http://` or `https://`."
+          "markdownDescription": "Full URL of the OpenGrok server. This must include the leading `http://` or `https://`.",
+          "scope": "workspace"
         },
         "openGrok.defaultProjectNames": {
           "type": "array",
+          "default": ["src"],
           "description": "Default project(s) used for search queries.",
+          "scope": "workspace",
           "items": {
             "type": "string"
           }
         },
         "openGrok.keepRecentSearches": {
           "type": "number",
-          "default": 0,
-          "description": "Keep the results of this many recent searches in the results view. A value of 0 means unlimited."
+          "default": 1,
+          "description": "Keep the results of this many recent searches in the results view. A value of 0 means unlimited.",
+          "scope": "workspace"
+        },
+        "openGrok.localRootDir": {
+          "type": "string",
+          "description": "Path to locate the search results in the local file system.",
+          "scope": "workspace"
         }
       }
     },
+    "keybindings": [
+      {
+        "command": "openGrok.search",
+        "key": "ctrl+shift+g ctrl+shift+f"
+      }
+    ],
     "menus": {
       "commandPalette": [
         {
@@ -88,18 +98,8 @@
           "when": "false"
         },
         {
-          "command": "openGrok.removeResultItem",
-          "when": "false"
-        },
-        {
           "command": "openGrok.copyBrowserLink",
           "when": "false"
-        }
-      ],
-      "editor/context": [
-        {
-          "command": "openGrok.searchSelection",
-          "when": "editorHasSelection"
         }
       ],
       "view/item/context": [
@@ -124,11 +124,6 @@
           "command": "openGrok.search",
           "when": "view == openGrokResults",
           "group": "navigation@0"
-        },
-        {
-          "command": "openGrok.clearResults",
-          "when": "view == openGrokResults",
-          "group": "navigation@1"
         }
       ]
     },
@@ -164,7 +159,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/node-fetch": "^2.6.12",
-    "@types/vscode": "^1.96.0",
+    "@types/vscode": "^1.80.0",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",
     "@vscode/test-cli": "^0.0.10",

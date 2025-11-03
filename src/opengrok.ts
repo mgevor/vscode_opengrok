@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // SearchQuery objects describe the input to OpenGrok's /search API.
 export interface SearchQuery {
     server: string;
+    authToken: string;
     projects: string[];
     path?: string[];
     type?: string[];
@@ -49,6 +50,7 @@ interface SearchResult {
 export function parseQuery(rawQuery: string): SearchQuery | null {
     let result: SearchQuery = {
         server: '',
+        authToken: '',
         projects: [],
         path: [],
         type: [],
@@ -96,8 +98,8 @@ export function parseQuery(rawQuery: string): SearchQuery | null {
                     value = segment.substring('sybmol:'.length);
                 }
                 else {
-                    // Default to symbol if no explicit 'field:'
-                    field = result.symbol!;
+                    // Default to full if no explicit 'field:'
+                    field = result.full!;
                     value = segment;
                 }
                 
@@ -145,6 +147,9 @@ export function parseQuery(rawQuery: string): SearchQuery | null {
 // - Escape special characters if they appear in the string.
 // - Enclose in quotes if it contains a space.
 export function escapeSearchString(searchString: string): string {
+    // if (searchString.startsWith('"') && searchString.endsWith('"')) {
+    //     searchString = searchString.slice(1, -1);
+    // }
     let result = (searchString
         .replaceAll('\\', '\\\\') // Escape backslashes first, or else we end
         .replaceAll('+', '\\+')   //  up escaping backslashes inserted to
@@ -165,7 +170,7 @@ export function escapeSearchString(searchString: string): string {
         .replaceAll('?', '\\?')
         .replaceAll(':', '\\:')
         .replaceAll('/', '\\/'));
-    result = `"${result}"`;
+    // result = `"${result}"`;
     return result;
 }
 
@@ -221,6 +226,7 @@ export async function search(searchQuery: SearchQuery): Promise<SearchResponseBo
     const response = await fetch(queryURLString, {
         method: 'GET',
         headers: {
+            'authorization': searchQuery.authToken,
             'content-type': 'application/json'
         }
     });

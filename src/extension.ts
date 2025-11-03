@@ -4,12 +4,47 @@ import * as vscode from 'vscode';
 import * as opengrok from './opengrok';
 import * as treeview from './treeview';
 import * as path from 'path';
+import * as auth from './auth';
 
 const TREEVIEW_STATE_KEY = 'openGrok.treeViewState';
 
-interface SearchRequest {
-	selection?: string
-};
+let lastQuery = '';
+let takeSelectedText = true;
+
+// If user has not configured the extension, prompt them to do so.
+async function validateSettings() : Promise<boolean> {
+
+	const config = vscode.workspace.getConfiguration();
+	const serverURL = config.get('openGrok.serverURL', '');
+	const defaultProjects = config.get<string[]>('openGrok.defaultProjectNames', []);
+	let message = '';
+	if (serverURL.trim() == '') {
+		message = 'The server';
+	}
+	if (defaultProjects.length == 0) {
+		if (message == '') {
+			message = 'The';
+		} else {
+			message += ' and';
+		}
+		message += ' default projects';
+	}
+	if (message != '') {
+		message += ' have not been configured.';
+		let propertyUri = (serverURL.trim() == '') ? 'openGrok.serverURL' : 'openGrok.defaultProjectNames';
+		vscode.window.showErrorMessage(message,
+			'Open Settings').then((item) => {
+				if (item == 'Open Settings') {
+					vscode.commands.executeCommand(
+						'workbench.action.openSettings',
+						propertyUri);
+				}
+			});
+		return false;
+	}
+
+	return true;
+}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -30,82 +65,78 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 	let treeView = vscode.window.createTreeView('openGrokResults', treeViewOptions);
 
-	// Restore state of the treeview.
-	try {
-		const treeViewState = context.workspaceState.get<treeview.WorkspaceState>(
-			TREEVIEW_STATE_KEY);
-		if (treeViewState) {
-			treeDataProvider.setWorkspaceState(treeViewState);
+	const commandLogin = vscode.commands.registerCommand(
+		'openGrok.login',
+		async () => {
+			if (!await validateSettings())
+				return;
+
+			const config = vscode.workspace.getConfiguration();
+			const serverURL = config.get('openGrok.serverURL', '');
+			auth.login(context, serverURL);
 		}
-	} catch (error) {
-		vscode.window.showErrorMessage(
-			`Error restoring OpenGrok results: ${error}`);
-	}
+	);
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
 	const commandSearch = vscode.commands.registerCommand(
 		'openGrok.search',
-		async (searchRequest?: SearchRequest) => {
-			// If user has not configured the extension, prompt them to do so.
+		async () => {
+			if (!await validateSettings())
+				return;
+
 			const config = vscode.workspace.getConfiguration();
 			const serverURL = config.get('openGrok.serverURL', '');
-			const defaultProjects = config.get<string[]>(
-				'openGrok.defaultProjectNames', []);
-			if (serverURL.trim() == '' || defaultProjects.length == 0) {
-				vscode.window.showInformationMessage(
-					'The server and default projects have not been configured.',
-					'Open Settings').then((item) => {
-						if (item == 'Open Settings') {
-							vscode.commands.executeCommand(
-								'workbench.action.openSettings',
-								'openGrok');
-						}
-					});
-				return;
+			const defaultProjects = config.get<string[]>('openGrok.defaultProjectNames', []);
+					
+			// Login if not authentificated.
+			let authToken = await auth.getAuthHeader(context) ?? '';
+			if (authToken == '') {
+				if (!await auth.login(context, serverURL))
+					return;
+				authToken = await auth.getAuthHeader(context) ?? '';
+			}
+
+			// Get selected text in the active editor.
+			// https://stackoverflow.com/a/73044114/1123681
+			let selectedText = '';
+			const editor = vscode.window.activeTextEditor;
+			if (takeSelectedText && editor) {
+				const selection = editor.selection;
+				if (!selection?.isEmpty) {
+				 	selectedText = editor.document.getText(selection);
+				}
+			}
+			if (selectedText == '') {
+				selectedText = lastQuery;
 			}
 
 			let searchQuery: opengrok.SearchQuery | null = null;
-			if (searchRequest?.selection) {
-				// Get query from selected text.
-				let searchString = opengrok.escapeSearchString(searchRequest.selection);
-				searchQuery = {
-					server: serverURL,
-					projects: defaultProjects,
-				};
-				// HACK: If the search string contains special characters
-				// (indicated by presence of a backslash), then do a full search
-				// instead of a symbol search.
-				// See: https://github.com/oracle/opengrok/issues/4701
-				if (searchString.indexOf('\\') == -1) {
-					// No special characters.
-					searchQuery.symbol = [searchString];
-				}
-				else {
-					searchQuery.full = [searchString];
-				}
+			
+			// Prompt query from user.
+			let query = await vscode.window.showInputBox({
+				title: "OpenGrok: Search",
+				prompt: "Enter an OpenGrok query",
+				value: selectedText
+			});
+			if (!query) {
+				// User cancelled the operation.
+				return;
 			}
-			else {
-				// Prompt query from user.
-				const rawQuery = await vscode.window.showInputBox({
-					title: "OpenGrok: Search",
-					prompt: "Enter an OpenGrok query"
-				});
-				if (!rawQuery) {
-					// User cancelled the operation.
-					return;
-				}
+			lastQuery = query;
+			takeSelectedText = false;
 
-				// Parse query.
-				searchQuery = opengrok.parseQuery(rawQuery);
-				if (!searchQuery) {
-					vscode.window.showErrorMessage('Invalid search query');
-					return;
-				}
-				searchQuery.server = serverURL;
-				searchQuery.projects.push(...defaultProjects);
+			// Parse query.
+			// query = opengrok.escapeSearchString(query);
+			searchQuery = opengrok.parseQuery(query.trim());
+			if (!searchQuery) {
+				vscode.window.showErrorMessage('Invalid search query');
+				return;
 			}
+			searchQuery.server = serverURL;
+			searchQuery.authToken = authToken;
+			searchQuery.projects.push(...defaultProjects);
 
 			// Focus on the results
 			// await vscode.commands.executeCommand('openGrokResults.focus');
@@ -137,37 +168,12 @@ export function activate(context: vscode.ExtensionContext) {
 				// Focus on the new item in the updated treeview.
 				await treeView.reveal(resultTreeItem, { focus: true });
 			});
-
-			// Save treeview state to be restored if workspace is closed.
-			await context.workspaceState.update(
-				TREEVIEW_STATE_KEY, treeDataProvider.getWorkspaceState());
 		}
 	);
 
-	const commandSearchSelection = vscode.commands.registerCommand(
-		'openGrok.searchSelection',
-		() => {
-			// Get selected text in the active editor.
-			// https://stackoverflow.com/a/73044114/1123681
-			const editor = vscode.window.activeTextEditor;
-			if (!editor) {
-				return;
-			}
-			const selection = editor.selection;
-			if (!selection || selection.isEmpty) {
-				return;
-			}
-			const selectionRange = new vscode.Range(
-				selection.start.line, selection.start.character,
-				selection.end.line, selection.end.character);
-			const selectionText = editor.document.getText(selectionRange);
-
-			// Initiate search for the selected text.
-			vscode.commands.executeCommand('openGrok.search', {
-				selection: selectionText
-			});
-		}
-	);
+	const disposable = vscode.window.onDidChangeTextEditorSelection((event) => {
+		takeSelectedText = true;
+	});
 
 	const commandopenInBrowser = vscode.commands.registerCommand(
 		'openGrok.openInBrowser',
@@ -182,17 +188,24 @@ export function activate(context: vscode.ExtensionContext) {
 		'openGrok.openInEditor',
 		(treeItem: treeview.TreeItem) => {
 			// Get workspace folder.
-			const workspaceFolder = 
-				vscode.workspace.workspaceFolders ?
-				vscode.workspace.workspaceFolders[0].uri.path : '/';
+			const config = vscode.workspace.getConfiguration();
+			const localRootDir = config.get('openGrok.localRootDir', '');
+			if (localRootDir.trim() == '') {
+				vscode.window.showErrorMessage(
+					'Please provide the local root path of the projects.',
+					'Open Settings').then((item) => {
+						if (item == 'Open Settings') {
+							vscode.commands.executeCommand(
+								'workbench.action.openWorkspaceSettings',
+								'openGrok.localRootDir');
+						}
+					});
+				return;
+			}
 			
-			// Remove first /directory from the file path. This directory would
-			// be the name of the grok-project.
-			const filePathWithoutProject =
-				treeItem.filePath!.split('/').slice(2).join('/');
-
 			// Make a new path relative to the workspace.
-			const localPath = path.join(workspaceFolder, filePathWithoutProject);
+			const filePathWithProject = treeItem.filePath ?? '';
+			const localPath = path.join(localRootDir, filePathWithProject);
 			const uri = vscode.Uri.file(localPath);
 			console.log(`Open in editor: ${uri.toString()}`);
 			const textDocumentShowOptions: vscode.TextDocumentShowOptions = {
@@ -210,21 +223,10 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	);
 
-	const commandClearResults = vscode.commands.registerCommand(
-		'openGrok.clearResults',
-		async () => {
-			treeDataProvider.clearResults();
-			await context.workspaceState.update(
-				TREEVIEW_STATE_KEY, treeDataProvider.getWorkspaceState());
-		}
-	);
-
 	const commandRemoveResultItem = vscode.commands.registerCommand(
 		'openGrok.removeResultItem',
 		async (item: treeview.TreeItem) => {
 			treeDataProvider.removeItem(item);
-			await context.workspaceState.update(
-				TREEVIEW_STATE_KEY, treeDataProvider.getWorkspaceState());
 		}
 	);
 
@@ -237,12 +239,10 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	context.subscriptions.push(
+		commandLogin,
 		commandSearch,
-		commandSearchSelection,
 		commandopenInBrowser,
 		commandOpenInEditor,
-		commandClearResults,
-		commandRemoveResultItem,
 		commandCopyBrowserLink);
 }
 
