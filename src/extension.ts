@@ -65,6 +65,14 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 	let treeView = vscode.window.createTreeView('openGrokResults', treeViewOptions);
 
+	treeView.onDidChangeSelection((e) => {
+		const selectedItems = e.selection; // Array of selected TreeItems
+		console.log('Selected items:', selectedItems.map(item => item.label));
+		
+		// You can set a context key if needed
+		vscode.commands.executeCommand('setContext', 'openGrokResultViewFocus', selectedItems.length > 0);
+	});
+
 	const commandLogin = vscode.commands.registerCommand(
 		'openGrok.login',
 		async () => {
@@ -208,13 +216,17 @@ export function activate(context: vscode.ExtensionContext) {
 			const localPath = path.join(localRootDir, filePathWithProject);
 			const uri = vscode.Uri.file(localPath);
 			console.log(`Open in editor: ${uri.toString()}`);
-			const textDocumentShowOptions: vscode.TextDocumentShowOptions = {
-				preserveFocus: true,
-				preview: true,
-				selection: new vscode.Range(
+			let selection = new vscode.Range(0, 0, 0, 0);
+			if (treeItem.lineNumber) {
+				selection = new vscode.Range(
 					// vscode.Range begins line numbers at 0.
 					treeItem.lineNumber! - 1, treeItem.firstMatchRange!.start,
 					treeItem.lineNumber! - 1, treeItem.firstMatchRange!.end)
+			}
+			const textDocumentShowOptions: vscode.TextDocumentShowOptions = {
+				preserveFocus: true,
+				preview: true,
+				selection: selection
 			};
 			vscode.commands.executeCommand(
 				'vscode.open',
@@ -226,7 +238,10 @@ export function activate(context: vscode.ExtensionContext) {
 	const commandRemoveResultItem = vscode.commands.registerCommand(
 		'openGrok.removeResultItem',
 		async (item: treeview.TreeItem) => {
+			const next = treeDataProvider.getNextItem(item);
 			treeDataProvider.removeItem(item);
+			if (next)
+				treeView.reveal(next, { select: false, focus: true });
 		}
 	);
 
@@ -238,12 +253,27 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	);
 
+	const commandCopyRelativePath = vscode.commands.registerCommand(
+		'openGrok.commandCopyRelativePath',
+		(item: treeview.TreeItem) => {
+			const filePathWithProject = item.filePath ?? '';
+			vscode.env.clipboard.writeText(filePathWithProject.toString());
+			vscode.window.showInformationMessage("Relative path copied to clipboard");
+		}
+	);
+
+	vscode.commands.registerCommand('openGrok.setContextKey', () => {
+    	vscode.commands.executeCommand('setContext', 'openGrokResultViewFocus', true);
+	});
+
 	context.subscriptions.push(
 		commandLogin,
 		commandSearch,
 		commandopenInBrowser,
 		commandOpenInEditor,
-		commandCopyBrowserLink);
+		commandCopyRelativePath,
+		commandCopyBrowserLink,
+		commandRemoveResultItem);
 }
 
 // This method is called when your extension is deactivated
