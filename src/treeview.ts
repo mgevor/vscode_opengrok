@@ -17,7 +17,7 @@ export class TreeItem extends vscode.TreeItem {
     public firstMatchRange: {start: number, end: number} | null = null;
 
     constructor(
-        public readonly id: string,
+        public readonly _id: string,
         public readonly searchQuery: opengrok.SearchQuery,
         public readonly searchResponseBody: opengrok.SearchResponseBody,
         public readonly kind: TreeItemKind,
@@ -83,20 +83,20 @@ export class TreeItem extends vscode.TreeItem {
 
     private constructResultItem() {
         this.contextValue = 'result';
-        const canonQuery = opengrok.getCanonicalQuery(this.searchQuery)
+        const simpleQuery = opengrok.getSimpleQuery(this.searchQuery)
         let numMatches = 0;
         let filePaths = Object.keys(this.searchResponseBody.results);
         filePaths.forEach((filePath) => {
             numMatches += this.searchResponseBody.results[filePath].length;
         });
-        this.label = `${canonQuery} (${numMatches} matches)`;
-        this.iconPath = new vscode.ThemeIcon('search-view-icon', new vscode.ThemeColor('#FFC000'));
+        this.label = `${simpleQuery} · ${numMatches} matches`;
+        this.iconPath = new vscode.ThemeIcon('search-view-icon', new vscode.ThemeColor('charts.blue'));
     }
 
     private constructDirectoryItem() {
         this.contextValue = 'directory';
         this.label = this.directoryPath!;
-        this.iconPath = vscode.ThemeIcon.Folder;
+        this.iconPath = new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.yellow'));
     }
 
     private constructFileItem() {
@@ -212,7 +212,7 @@ export function buildTreeItems(
         const directoryPath = path.dirname(filePath);
         let directoryItem = directoryItems.get(directoryPath);
         if (!directoryItem) {
-            directoryItem = new TreeItem((id++).toString(),
+            directoryItem = new TreeItem((id).toString(),
                 searchQuery, searchResponseBody, TreeItemKind.Directory,
                 directoryPath, null, null);
             resultItem.addChild(directoryItem);
@@ -309,7 +309,7 @@ export class TreeDataProvider implements vscode.TreeDataProvider<TreeItem> {
 
         const parent = element.parentItem;
         const siblings = parent ? parent.getChildren() : this._resultItems;
-        const index = siblings.findIndex(el => el.id == element.id);
+        const index = siblings.findIndex(el => el._id == element._id);
         if (index >= 0 && index < siblings.length) {
             if (index == siblings.length - 1)
                 return siblings.length == 1 ? parent : siblings[index - 1] ;

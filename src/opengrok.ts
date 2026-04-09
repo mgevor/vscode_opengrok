@@ -174,6 +174,14 @@ export function escapeSearchString(searchString: string): string {
     return result;
 }
 
+export function getSimpleQuery(searchQuery: SearchQuery): string {
+    let result: string[] = []
+    searchQuery.full?.forEach((full) => {
+        result.push(`${full}`);
+    });
+    return result.join(' ');
+}
+
 // Returns a canonical string description of the given query, which can
 // be displayed to the user.
 export function getCanonicalQuery(searchQuery: SearchQuery): string {
