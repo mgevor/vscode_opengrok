@@ -8,7 +8,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "displayName": "OpenGrok",
   "description": "Based on the 'OpenGrok Client for VS Code' project by @samwarring\nModified and build by @mgevor",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "icon": "images/OpenGrokIcon.png",
   "engines": {
     "vscode": "^1.80.0"
