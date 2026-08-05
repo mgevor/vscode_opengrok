@@ -57,3 +57,9 @@ in the current workspace at the same relative path.
 
 Each search result includes buttons to view the result on the OpenGrok web
 interface, copy a link to the web interface, and dismiss the result.
+
+
+## Build VSIX file
+
+From the root folder call:
+  vsce package
