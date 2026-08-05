@@ -262,6 +262,71 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	);
 
+	const commandSaveResult = vscode.commands.registerCommand(
+		'openGrok.saveResult',
+		async (item: treeview.TreeItem) => {
+			if (!item || item.kind !== treeview.TreeItemKind.Result) {
+				vscode.window.showErrorMessage('Please run this command on a search result item.');
+				return;
+			}
+
+			// Compute simple query and match count, and prepare filename.
+			const simpleQuery = opengrok.getSimpleQuery(item.searchQuery) || 'query';
+			let matchCount = 0;
+			Object.keys(item.searchResponseBody.results).forEach((p) => {
+				matchCount += item.searchResponseBody.results[p].length;
+			});
+
+			// Sanitize filename
+			let fileNameBase = `${simpleQuery}_${matchCount}`.replaceAll(/[/\\?%*:|"<> ]/g, '_');
+			if (fileNameBase.length > 200) fileNameBase = fileNameBase.substring(0,200);
+			const fileName = `${fileNameBase}.json`;
+
+			// Prepare default folder (config `openGrok.localRootDir`).
+			const config = vscode.workspace.getConfiguration();
+			const localRootDir = config.get<string>('openGrok.localRootDir', '');
+			let defaultUri: vscode.Uri | undefined;
+			const candidateFileName = fileName;
+			const dirUri = vscode.Uri.file(localRootDir);
+			// Ensure target directory exists; create if missing.
+			try {
+				await vscode.workspace.fs.stat(dirUri);
+			} catch (e) {
+				vscode.window.showErrorMessage(`Error with local folder: ${e}`);
+				return;
+			}
+			defaultUri = vscode.Uri.joinPath(dirUri, candidateFileName);
+
+			// Show save dialog with default filename and location.
+			const saveUri = await vscode.window.showSaveDialog({
+				defaultUri: defaultUri,
+				saveLabel: 'Save',
+				filters: { 'JSON': ['json'] }
+			});
+			if (!saveUri) {
+				return;
+			}
+			const folderUri = vscode.Uri.file(path.dirname(saveUri.fsPath));
+
+			// Construct JSON content
+			const payload = {
+				query: opengrok.getCanonicalQuery(item.searchQuery),
+				simpleQuery: simpleQuery,
+				matchCount: matchCount,
+				results: item.searchResponseBody
+			};
+
+			const content = Buffer.from(JSON.stringify(payload, null, 2), 'utf8');
+			const fileUri = vscode.Uri.joinPath(folderUri, fileName);
+			try {
+				await vscode.workspace.fs.writeFile(fileUri, content);
+				vscode.window.showInformationMessage(`Saved results to ${fileUri.fsPath}`);
+			} catch (err: any) {
+				vscode.window.showErrorMessage(`Failed to save results: ${err.message ?? err}`);
+			}
+		}
+	);
+
 	vscode.commands.registerCommand('openGrok.setContextKey', () => {
     	vscode.commands.executeCommand('setContext', 'openGrokResultViewFocus', true);
 	});
@@ -273,7 +338,8 @@ export function activate(context: vscode.ExtensionContext) {
 		commandOpenInEditor,
 		commandCopyRelativePath,
 		commandCopyBrowserLink,
-		commandRemoveResultItem);
+		commandRemoveResultItem,
+		commandSaveResult);
 }
 
 // This method is called when your extension is deactivated

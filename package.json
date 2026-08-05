@@ -49,6 +49,11 @@
         "command": "openGrok.login",
         "title": "OpenGrok: login",
         "icon": "$(login)"
+      },
+      {
+        "command": "openGrok.saveResult",
+        "title": "OpenGrok: Save Results",
+        "icon": "$(save)"
       }
     ],
     "configuration": {
@@ -134,6 +139,16 @@
           "command": "openGrok.removeResultItem",
           "when": "view == openGrokResults",
           "group": "navigation@1"
+        },
+        {
+          "command": "openGrok.saveResult",
+          "when": "view == openGrokResults && viewItem == result",
+          "group": "inline@4"
+        },
+        {
+          "command": "openGrok.saveResult",
+          "when": "view == openGrokResults && viewItem == result",
+          "group": "3_priority@2"
         }
       ]
     },
