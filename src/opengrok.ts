@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // SearchQuery objects describe the input to OpenGrok's /search API.
 export interface SearchQuery {
     server: string;
-    authToken: string;
+    cookie: string;
     projects: string[];
     path?: string[];
     type?: string[];
@@ -50,7 +50,7 @@ interface SearchResult {
 export function parseQuery(rawQuery: string): SearchQuery | null {
     let result: SearchQuery = {
         server: '',
-        authToken: '',
+        cookie: '',
         projects: [],
         path: [],
         type: [],
@@ -234,13 +234,17 @@ export async function search(searchQuery: SearchQuery): Promise<SearchResponseBo
     const response = await fetch(queryURLString, {
         method: 'GET',
         headers: {
-            'authorization': searchQuery.authToken,
+            'cookie': searchQuery.cookie,
             'content-type': 'application/json'
         }
     });
-    const responseJSON = await response.json();
-    console.log(responseJSON);
+    if (response.status == 401) {
+        vscode.window.showErrorMessage('Session expired, please login again');    
+    } else if (response.status != 200) {
+        vscode.window.showErrorMessage(`Request failed, code: ${response.status}`);    
+    }
 
+    const responseJSON = await response.json();
     return Promise.resolve(responseJSON);
 }
 

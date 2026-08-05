@@ -99,11 +99,11 @@ export function activate(context: vscode.ExtensionContext) {
 			const defaultProjects = config.get<string[]>('openGrok.defaultProjectNames', []);
 					
 			// Login if not authentificated.
-			let authToken = await auth.getAuthHeader(context) ?? '';
-			if (authToken == '') {
+			let cookie = await auth.getCookie(context) ?? '';
+			if (cookie == '') {
 				if (!await auth.login(context, serverURL))
 					return;
-				authToken = await auth.getAuthHeader(context) ?? '';
+				cookie = await auth.getCookie(context) ?? '';
 			}
 
 			// Get selected text in the active editor.
@@ -143,7 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 			searchQuery.server = serverURL;
-			searchQuery.authToken = authToken;
+			searchQuery.cookie = cookie;
 			searchQuery.projects.push(...defaultProjects);
 
 			// Focus on the results

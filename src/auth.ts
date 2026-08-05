@@ -5,30 +5,21 @@ const SERVICE_NAME = 'openGrok';
 /**
  * Retrieve saved credentials.
  */
-export async function getAuthHeader(context: vscode.ExtensionContext): Promise<string | undefined> {
+export async function getCookie(context: vscode.ExtensionContext): Promise<string | undefined> {
   const secrets = context.secrets;
 
-  const usernameKey = `${SERVICE_NAME}.username`;
-  const passwordKey = `${SERVICE_NAME}.password`;
-
-  let username = await secrets.get(usernameKey);
-  let password = await secrets.get(passwordKey);
-
-  // Ask user if not saved
-  if (username && password) {
-    return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
-  }
-
-  return undefined;
+  const cookieKey = `${SERVICE_NAME}.cookie`;
+  let cookie = await secrets.get(cookieKey);
+  
+  return cookie;
 }
 
 /**
  * Remove saved credentials (e.g. for logout).
  */
-async function saveCreds(context: vscode.ExtensionContext, username: string, password: string) {
+async function saveCreds(context: vscode.ExtensionContext, username: string, password: string, cookie: string) {
   const secrets = context.secrets;
-  await secrets.store(`${SERVICE_NAME}.username`, username);
-  await secrets.store(`${SERVICE_NAME}.password`, password);
+  await secrets.store(`${SERVICE_NAME}.cookie`, cookie);
 }
 
 /**
@@ -36,8 +27,7 @@ async function saveCreds(context: vscode.ExtensionContext, username: string, pas
  */
 export async function clearCreds(context: vscode.ExtensionContext) {
   const secrets = context.secrets;
-  await secrets.delete(`${SERVICE_NAME}.username`);
-  await secrets.delete(`${SERVICE_NAME}.password`);
+  await secrets.delete(`${SERVICE_NAME}.cookie`);
 }
 
 /**
@@ -65,16 +55,22 @@ export  async function login(context: vscode.ExtensionContext, serverURL: string
     return false;
 
   try {
-    const response = await fetch(serverURL, {
-      method: 'GET',
+    const response = await fetch(`${serverURL}/login`, {
+      method: "POST",
       headers: {
-        'Authorization':'Basic ' + Buffer.from(`${username}:${password}`).toString('base64'),
-        'Accept': 'application/json',
+          "Content-Type": "application/x-www-form-urlencoded",
       },
+      body: new URLSearchParams({
+          username,
+          password,
+      }),
+      redirect: "manual",
     });
 
-    if (response.status === 200) {
-      await saveCreds(context, username, password);
+    if (response.status == 200 || response.status == 302) {
+      const setCookie = response.headers.get('set-cookie') ?? '';
+      const cookie = setCookie?.split(';')[0] ?? '';
+      await saveCreds(context, username, password, cookie);
       vscode.window.showInformationMessage('Authentication succeed.');
       return true;
     } else if (response.status === 401) {
